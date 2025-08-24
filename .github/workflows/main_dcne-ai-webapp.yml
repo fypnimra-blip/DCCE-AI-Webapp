@@ -58,4 +58,4 @@ jobs:
         with:
           app-name: 'DCNE-AI-Webapp'
           slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_5035D5E5FC99423181C80052AA089FCF }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_44593C9D5B6247BEA66EF70F550FF90D }}
