@@ -2,5 +2,7 @@
   "prediction_key": "FOXkyOUinpUXymQBv8nM8XhOhkYCCRPX5ZoXtCRFaRDj2YjqgVb4JQQJ99BGACYeBjFXJ3w3AAAIACOG5NYX",
   "prediction_endpoint": "https://customvisiontraining1-prediction.cognitiveservices.azure.com/",
   "project_id": "d325a4ed-d975-4957-9cd2-790b727519df",
-  "model_name": "DCNE_lowres"
+  "model_name": "DCNE_lowres",
+  "openai_api_key": "Bdi3r6GeEZWllWdBsDakEN1n8LZtuSaul2hZjXhC2oxJNxlix8F6JQQJ99BHACYeBjFXJ3w3AAAAACOG7nX8",
+  "openai_endpoint": "https://aifoundry-acs.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2025-01-01-preview"
 } 

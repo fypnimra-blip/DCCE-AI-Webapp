@@ -307,8 +307,22 @@ def run_hexagon_extraction(image_path, temp_dir):
         return {'success': False, 'error': f"Exception occurred: {str(e)}"}
 
 def run_hexagon_validation(hexagons_folder, temp_dir):
-    """Run GPT-4 validation"""
+    """Run GPT-4 validation with proper configuration"""
     try:
+        # Load configuration
+        config_path = "config.json"
+        if not os.path.exists(config_path):
+            return {'success': False, 'error': "config.json not found"}
+        
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        
+        # Check for OpenAI API key
+        openai_api_key = config.get('openai_api_key')
+        
+        if not openai_api_key or openai_api_key == "YOUR_OPENAI_API_KEY_HERE":
+            return {'success': False, 'error': "OpenAI API key not configured in config.json. Please add your OpenAI API key to config.json"}
+        
         # Get the folder name to determine the expected file prefix
         folder_name = os.path.basename(hexagons_folder)
         
@@ -317,11 +331,13 @@ def run_hexagon_validation(hexagons_folder, temp_dir):
         validation_json = os.path.join(hexagons_folder, f"hexagon_validation_{folder_name}.json")
         true_hexagons_json = os.path.join(hexagons_folder, f"hexagon_validation_{folder_name}_true_hexagons.json")
         
-        # Run validation - use the exact path that works
+        # Run validation with proper API key and Azure endpoint
         cmd = [
             sys.executable, "extract_hexagon_info.py",
             hexagons_folder,
-            "--output", validation_json
+            "--output", validation_json,
+            "--api-key", openai_api_key,
+            "--endpoint", config.get('openai_endpoint', 'https://api.openai.com/v1/chat/completions')
         ]
         
         # Store debug info for sidebar
@@ -450,11 +466,32 @@ def main():
     uploaded_file = st.file_uploader(
         "Choose an image file",
         type=['jpg', 'jpeg', 'png', 'bmp', 'tiff'],
-        help="Upload an image containing hexagons to process"
+        help="Upload an image containing hexagons to process",
+        key="file_uploader"
     )
     st.markdown('</div>', unsafe_allow_html=True)
     
     if uploaded_file is not None:
+        # Reset processing state when a new file is uploaded
+        if 'previous_file_name' not in st.session_state or st.session_state.previous_file_name != uploaded_file.name:
+            # Reset all processing state
+            st.session_state.processing_started = False
+            st.session_state.processing_completed = False
+            st.session_state.processing_halted = False
+            st.session_state.completed_steps = []
+            st.session_state.processing_status = {}
+            st.session_state.processing_results = {}
+            st.session_state.detection_result = None
+            st.session_state.extraction_result = None
+            st.session_state.validation_result = None
+            st.session_state.mapping_result = None
+            
+            # Store the new file name
+            st.session_state.previous_file_name = uploaded_file.name
+            
+            # Force rerun to clear the display
+            st.rerun()
+        
         # Display uploaded image
         col1, col2 = st.columns([1, 1])
         
@@ -557,6 +594,8 @@ def main():
                             st.rerun()
                         
                         if detection_result['success']:
+                            # Store detection_result in session state for persistence
+                            st.session_state['detection_result'] = detection_result
                             st.session_state['processing_status']['Detection'] = {
                                 'completed': True, 
                                 'time': progress_data['detection_time']
@@ -586,6 +625,8 @@ def main():
                             st.rerun()
                         
                         if extraction_result['success']:
+                            # Store extraction_result in session state for persistence
+                            st.session_state['extraction_result'] = extraction_result
                             st.session_state['processing_status']['Extraction'] = {
                                 'completed': True, 
                                 'time': progress_data['extraction_time']
@@ -602,9 +643,17 @@ def main():
                 
                 # Step 3: Validation
                 if 1 in st.session_state.completed_steps and 2 not in st.session_state.completed_steps:
+                    # Safety check for extraction_result from session state
+                    if 'extraction_result' not in st.session_state or st.session_state.extraction_result is None:
+                        st.error("Extraction result not available. Please restart processing.")
+                        st.session_state.processing_started = False
+                        st.session_state.processing_completed = False
+                        st.session_state.processing_halted = True
+                        st.rerun()
+                    
                     with st.spinner("Validating hexagons with GPT-4..."):
                         start_time = time.time()
-                        validation_result = run_hexagon_validation(extraction_result['hexagons_folder'], temp_dir)
+                        validation_result = run_hexagon_validation(st.session_state.extraction_result['hexagons_folder'], temp_dir)
                         progress_data['validation_time'] = time.time() - start_time
                         
                         # Check if processing was stopped
@@ -614,6 +663,8 @@ def main():
                             st.rerun()
                         
                         if validation_result['success']:
+                            # Store validation_result in session state for persistence
+                            st.session_state['validation_result'] = validation_result
                             st.session_state['processing_status']['Validation'] = {
                                 'completed': True, 
                                 'time': progress_data['validation_time']
@@ -622,7 +673,6 @@ def main():
                             st.success(f"Validation Complete ({validation_result['true_count']} true hexagons, {progress_data['validation_time']:.1f}s)")
                         else:
                             st.error(f"Validation failed: {validation_result['error']}")
-                            st.info("Debug info: Check OpenAI API key and internet connection")
                             # Reset processing state on error
                             st.session_state.processing_started = False
                             st.session_state.processing_completed = False
@@ -631,12 +681,20 @@ def main():
                 
                 # Step 4: Mapping
                 if 2 in st.session_state.completed_steps and 3 not in st.session_state.completed_steps:
+                    # Safety check for required variables from session state
+                    if 'validation_result' not in st.session_state or st.session_state.validation_result is None or 'detection_result' not in st.session_state or st.session_state.detection_result is None:
+                        st.error("Required results not available. Please restart processing.")
+                        st.session_state.processing_started = False
+                        st.session_state.processing_completed = False
+                        st.session_state.processing_halted = True
+                        st.rerun()
+                        
                     with st.spinner("Mapping and counting duplicates..."):
                         start_time = time.time()
                         mapping_result = run_enhanced_mapping(
                             temp_image_path,
-                            validation_result['true_hexagons_json'],
-                            detection_result['detection_json'],
+                            st.session_state.validation_result['true_hexagons_json'],
+                            st.session_state.detection_result['detection_json'],
                             temp_dir
                         )
                         progress_data['mapping_time'] = time.time() - start_time
@@ -648,6 +706,8 @@ def main():
                             st.rerun()
                         
                         if mapping_result['success']:
+                            # Store mapping_result in session state for persistence
+                            st.session_state['mapping_result'] = mapping_result
                             st.session_state['processing_status']['Mapping'] = {
                                 'completed': True, 
                                 'time': progress_data['mapping_time']
