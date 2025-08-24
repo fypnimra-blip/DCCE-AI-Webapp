@@ -1,0 +1,6 @@
+{
+  "prediction_key": "FOXkyOUinpUXymQBv8nM8XhOhkYCCRPX5ZoXtCRFaRDj2YjqgVb4JQQJ99BGACYeBjFXJ3w3AAAIACOG5NYX",
+  "prediction_endpoint": "https://customvisiontraining1-prediction.cognitiveservices.azure.com/",
+  "project_id": "d325a4ed-d975-4957-9cd2-790b727519df",
+  "model_name": "DCNE_lowres"
+} 
